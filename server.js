@@ -22,7 +22,7 @@ db.on("error", console.error.bind(console, "connection error:"));
 db.once("open", function() {
   // we're connected!
 });
-mongoose.set('useCreateIndex', true);
+mongoose.set("useCreateIndex", true);
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use("/productPhotos", express.static("productPhotos"));
@@ -37,13 +37,13 @@ let productStorage = multer.diskStorage({
   }
 });
 let userStorage = multer.diskStorage({
-  destination: (req,file,cb)=>{
-    cb(null, "./UserProfile/userPhotos")
+  destination: (req, file, cb) => {
+    cb(null, "./UserProfile/userPhotos");
   },
-  filename: (req,file,cb)=>{
-    cb(null, file.fieldname + "_" + Date.now() + "_" + file.originalname)
+  filename: (req, file, cb) => {
+    cb(null, file.fieldname + "_" + Date.now() + "_" + file.originalname);
   }
-})
+});
 let fileFilter = (req, file, cb) => {
   if (file.mimetype === "image/jpeg" || file.mimetype === "image/png") {
     cb(null, true);
@@ -64,12 +64,9 @@ let uploadUserImg = multer({
     fileSize: 1024 * 1024 * 5
   },
   fileFilter: fileFilter
-
-})
+});
 
 app.use(morgan("dev"));
-
-
 
 app.get("/products", (req, res, next) => {
   Product.find()
@@ -120,7 +117,6 @@ app.post(
           })
         );
       } else {
-       
         res.send(
           JSON.stringify({
             success: true,
@@ -150,46 +146,44 @@ app.delete("/product/:id", checkAuth, (req, res, next) => {
   });
 });
 
-app.get("/orders", (req, res, next) => {
-  Order.find()
-    .populate("product")
-    .exec((err, orders) => {
+app.get("/orders/:id", (req, res, next) => {
+  User.findOne({ _id: req.params.id })
+    .populate("myOrders")
+    .exec((err, user) => {
       if (err) {
-        res.send(
-          JSON.stringify({ error: err, message: "error finding orders" })
-        );
+        res.send(JSON.stringify({ error: err, message: "error finding user" }));
       } else {
         res.send(
           JSON.stringify({
             success: true,
             message: "orders found successfully",
-            orders
+            user
           })
         );
       }
     });
 });
 
-app.delete("/order/:id", checkAuth, (req, res, next) => {
-  Order.deleteOne({ _id: req.params.id }, err => {
-    if (err) {
-      res.send(
-        JSON.stringify({ error: true, message: "error deleting order" })
-      );
-    } else {
-      res.send(
-        JSON.stringify({
-          success: true,
-          message: " order successfully deleted"
-        })
-      );
-    }
-  });
+app.post("/order/:id", checkAuth, (req, res, next) => {
+ User.findOne({_id: req.params.id})
+ .populate("myOrders")
+ .exec((err,user)=>{
+   if (err){
+     res.send(JSON.stringify({error: true, message:"error finding user"}))
+   } else{
+     user.myOrders.splice(req.body.index,1)
+     user.save(err=>{
+       if(err){
+         res.send(JSON.stringify({error: true, message:"error saving user"}))
+       } else{
+         res.send(JSON.stringify({succes: true, message:"product successfully removed from cart"}))
+       }
+     })
+   }
+ })
 });
- 
-app.post("/signup", 
-uploadUserImg.single("userImage"), 
-(req, res, next) => {
+
+app.post("/signup", uploadUserImg.single("userImage"), (req, res, next) => {
   User.findOne({ email: req.body.email }).exec((err, user) => {
     if (err) {
       res.send(JSON.stringify({ error: err, message: "error finding user" }));
@@ -278,33 +272,85 @@ app.post("/login", (req, res, next) => {
 });
 
 app.post("/addOrder", checkAuth, (req, res, next) => {
-  let order = new Order();
-  order.product = req.body.id;
-
-  order.save((err, order) => {
+  let token = req.headers.authorization.split(" ")[1];
+  let decoded = jwt.decode(token, "secret");
+  User.findOne({ _id: decoded.id }).exec((err, user) => {
     if (err) {
-      res.send(JSON.stringify({ error: err, message: "error saving order" }));
+      res.send(JSON.stringify({ error: true, message: "error finding user" }));
     } else {
-      res.send(
-        JSON.stringify({
-          success: true,
-          message: "successfully saved the order"
-        })
-      );
+      user.myOrders.push(req.body.id) 
+      user.save(err => {
+        if (err) {
+          res.send(
+            JSON.stringify({ error: true, message: "error saving user" })
+          );
+        } else {
+          res.send(
+            JSON.stringify({
+              succes: true,
+              message: "successfully saved the user"
+            })
+          );
+        }
+      });
     }
   });
 });
+
+// app.post("/user/:id", (req, res, next) => {
+//   User.findOne({ _id: req.params.id })
+//     .populate({
+//       path: "myOrders",
+//       model: "Order",
+//       populate: { path: "product", model: "Product" }
+//     })
+//     .exec((err, user) => {
+//       if (err) {
+//         res.send(JSON.stringify({ message: "error finding user" }));
+//       } else {
+//         user.messages.push(req.body.message);
+//         user.save((err, user) => {
+//           if (err) {
+//             res.send(JSON.stringify({ message: "error saving user" }));
+//           } else {
+//             res.send(JSON.stringify({ message: "successfully done", user }));
+//           }
+//         });
+//       }
+//     });
+// });
 
 app.get("/user/:id", (req, res, next) => {
   User.findOne({ _id: req.params.id }).exec((err, user) => {
     if (err) {
       res.send(JSON.stringify({ message: "error finding user" }));
     } else {
-      res.send(JSON.stringify({ message: "successfully done",
-      user }));
-      console.log(user)
+      res.send(JSON.stringify({ message: "successfully done", user }));
+      console.log(user);
     }
   });
+});
+
+app.post("/search", (req, res, next) => {
+  Product.find()
+    .populate("createdBy")
+    .exec((err, products) => {
+      if (err) {
+        res.send(JSON.stringify({ message: "error finding products" }));
+      } else {
+        let searchFunction = product => {
+          if (
+            product.category.toLowerCase().includes(req.body.searchInput) ||
+            product.type.toLowerCase().includes(req.body.searchInput) ||
+            product.condition.toLowerCase().includes(req.body.searchInput)
+          ) {
+            return true;
+          }
+        };
+        let result = products.filter(searchFunction);
+        res.send(JSON.stringify({ result }));
+      }
+    });
 });
 // Handling Error
 app.use((req, res, next) => {

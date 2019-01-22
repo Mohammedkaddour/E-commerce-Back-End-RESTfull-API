@@ -41,7 +41,11 @@ required: true
   messages:{
     type: Array,
     required: false
-
-  } 
+  } ,
+  myOrders:[{
+      type:mongoose.Schema.Types.ObjectId,
+      ref:"Product",
+  required:false
+}]
 });
 module.exports = mongoose.model("User", userSchema);

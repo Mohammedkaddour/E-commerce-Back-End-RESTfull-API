@@ -8,6 +8,6 @@ module.exports = (req,res,next)=>{
         req.userData = decoded
         next()
     } catch (error){
-        res.status(500).send(JSON.stringify({message: "sorry Auth failed"}))
+        res.status(500).send(JSON.stringify({error:true, message: "sorry Auth failed"}))
     }
 }
